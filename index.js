@@ -9,11 +9,11 @@ module.exports = function (homebridge) {
     HomebridgeAPI = homebridge;
     FakeGatoHistoryService = require("fakegato-history")(homebridge);
 
-    homebridge.registerAccessory("homebridge-mi-flower-care", "mi-flower-care", MiFlowerCarePlugin);
+    homebridge.registerAccessory("homebridge-weatherstation2", "WeatherStation2", WeatherStation2Plugin);
 };
 
 
-function MiFlowerCarePlugin(log, config) {
+function WeatherStation2Plugin(log, config) {
     var that = this;
     this.log = log;
     this.name = config.name;
@@ -41,55 +41,22 @@ function MiFlowerCarePlugin(log, config) {
 
     // Setup services
     this.setUpServices();
-
-    // Setup MiFlora
-    this.flora = new MiFlora(this.deviceId);
-
-    this.flora.on('data', function (data) {
-        if (data.deviceId = that.deviceId) {
-            that.log("Lux: %s, Temperature: %s, Moisture: %s, Fertility: %s", data.lux, data.temperature, data.moisture, data.fertility);
-            that.storedData.data = data;
-
-            that.fakeGatoHistoryService.addEntry({
-                time: new Date().getTime() / 1000,
-                temp: data.temperature,
-                humidity: data.moisture
-            });
-        }
-    });
-
-    this.flora.on('firmware', function (data) {
-        if (data.deviceId = that.deviceId) {
-            that.log("Firmware: %s, Battery level: %s", data.firmwareVersion, data.batteryLevel);
-            that.storedData.firmware = data;
-        }
-    });
-
-    setInterval(function () {
-        // Start scanning for updates, these will arrive in the corresponding callbacks
-        that.flora.startScanning();
-
-        // Stop scanning 100ms before we start a new scan
-        setTimeout(function () {
-            that.flora.stopScanning();
-        }, (that.interval - 0.1) * 1000)
-    }, this.interval * 1000);
 }
 
 
-MiFlowerCarePlugin.prototype.getFirmwareRevision = function (callback) {
+WeatherStation2Plugin.prototype.getFirmwareRevision = function (callback) {
     callback(null, this.storedData.firmware ? this.storedData.firmware.firmwareVersion : '0.0.0');
 };
 
-MiFlowerCarePlugin.prototype.getBatteryLevel = function (callback) {
+WeatherStation2Plugin.prototype.getBatteryLevel = function (callback) {
     callback(null, this.storedData.firmware ? this.storedData.firmware.batteryLevel : 0);
 };
 
-MiFlowerCarePlugin.prototype.getStatusActive = function (callback) {
+WeatherStation2Plugin.prototype.getStatusActive = function (callback) {
     callback(null, this.storedData.data ? true : false);
 };
 
-MiFlowerCarePlugin.prototype.getStatusLowBattery = function (callback) {
+WeatherStation2Plugin.prototype.getStatusLowBattery = function (callback) {
     if (this.storedData.firmware) {
         callback(null, this.storedData.firmware.batteryLevel <= 20 ? Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW : Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL);
     } else {
@@ -97,7 +64,7 @@ MiFlowerCarePlugin.prototype.getStatusLowBattery = function (callback) {
     }
 };
 
-MiFlowerCarePlugin.prototype.getStatusLowMoisture = function (callback) {
+WeatherStation2Plugin.prototype.getStatusLowMoisture = function (callback) {
     if (this.storedData.data) {
         callback(null, this.storedData.data.moisture <= this.humidityAlertLevel ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED : Characteristic.ContactSensorState.CONTACT_DETECTED);
     } else {
@@ -105,7 +72,7 @@ MiFlowerCarePlugin.prototype.getStatusLowMoisture = function (callback) {
     }
 };
 
-MiFlowerCarePlugin.prototype.getStatusLowLight = function (callback) {
+WeatherStation2Plugin.prototype.getStatusLowLight = function (callback) {
     if (this.storedData.data) {
         callback(null, this.storedData.data.lux <= this.lowLightAlertLevel ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED : Characteristic.ContactSensorState.CONTACT_DETECTED);
     } else {
@@ -113,34 +80,33 @@ MiFlowerCarePlugin.prototype.getStatusLowLight = function (callback) {
     }
 };
 
-MiFlowerCarePlugin.prototype.getCurrentAmbientLightLevel = function (callback) {
+WeatherStation2Plugin.prototype.getCurrentAmbientLightLevel = function (callback) {
     callback(null, this.storedData.data ? this.storedData.data.lux : 0);
 };
 
-MiFlowerCarePlugin.prototype.getCurrentTemperature = function (callback) {
+WeatherStation2Plugin.prototype.getCurrentTemperature = function (callback) {
     callback(null, this.storedData.data ? this.storedData.data.temperature : 0);
 };
 
-MiFlowerCarePlugin.prototype.getCurrentMoisture = function (callback) {
+WeatherStation2Plugin.prototype.getCurrentMoisture = function (callback) {
     callback(null, this.storedData.data ? this.storedData.data.moisture : 0);
 };
 
-MiFlowerCarePlugin.prototype.getCurrentFertility = function (callback) {
+WeatherStation2Plugin.prototype.getCurrentFertility = function (callback) {
     callback(null, this.storedData.data ? this.storedData.data.fertility : 0);
 };
 
 
-MiFlowerCarePlugin.prototype.setUpServices = function () {
+WeatherStation2Plugin.prototype.setUpServices = function () {
     // info service
     this.informationService = new Service.AccessoryInformation();
 
     this.informationService
-        .setCharacteristic(Characteristic.Manufacturer, this.config.manufacturer || "Xiaomi")
-        .setCharacteristic(Characteristic.Model, this.config.model || "Flower Care")
+        .setCharacteristic(Characteristic.Manufacturer, this.config.manufacturer)
+        .setCharacteristic(Characteristic.Model, this.config.model || "WeatherStation2")
         .setCharacteristic(Characteristic.SerialNumber, this.config.serial || hostname + "-" + this.name);
     this.informationService.getCharacteristic(Characteristic.FirmwareRevision)
         .on('get', this.getFirmwareRevision.bind(this));
-
     this.batteryService = new Service.BatteryService(this.name);
     this.batteryService.getCharacteristic(Characteristic.BatteryLevel)
         .on('get', this.getBatteryLevel.bind(this));
@@ -260,7 +226,7 @@ MiFlowerCarePlugin.prototype.setUpServices = function () {
 };
 
 
-MiFlowerCarePlugin.prototype.getServices = function () {
+WeatherStation2Plugin.prototype.getServices = function () {
     var services = [this.informationService, this.batteryService, this.lightService, this.tempService, this.humidityService, this.plantSensorService, this.fakeGatoHistoryService];
     if (this.humidityAlert) {
         services[services.length] = this.humidityAlertService;
