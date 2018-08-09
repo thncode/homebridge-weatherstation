@@ -1,0 +1,31 @@
+{
+    "name": "homebridge-weatherstation2",
+    "version": "0.0.1",
+    "description": "This is a homebridge plugin for local weather stations",
+    "main": "index.js",
+    "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/thncode/homebridge-weatherstation2.git"
+    },
+    "keywords": [
+        "homebridge",
+        "homebridge-plugin",
+        "HomeKit"
+    ],
+    "author": "Thomas Nemec",
+    "license": "ISC",
+    "bugs": {
+        "url": "https://github.com/thncode/homebridge-weatherstation2/issues"
+    },
+    "homepage": "https://github.com/thncode/homebridge-weatherstation2#readme",
+    "engines" : {
+        "node": ">=0.12.0",
+        "homebridge": ">=0.2.0"
+    },
+    "dependencies" :{
+        "fakegato-history": "^0.4.0"
+    }
+}
