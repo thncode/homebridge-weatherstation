@@ -2,8 +2,32 @@ var Service, Characteristic, HomebridgeAPI, FakeGatoHistoryService;
 var inherits = require('util').inherits;
 var os = require("os");
 var hostname = os.hostname();
+const fs = require('fs');
+
+var intervalID;
+var f_intervalID;
+
+const readFile = "/home/pi/WeatherStation/data.txt";
+
+var temperature;
+var airPressure;
+var maxWind;
+var avgWind;
+var sunlight;
+var humidity;
+var rain;
+var battery;
+var uv;
+
+var lightAlertLevel;
+var maxWindAlertLevel;
+var rainAlertLevel;
+
+var glog;
+var ctime;
 
 module.exports = function (homebridge) {
+	
     Service = homebridge.hap.Service;
     Characteristic = homebridge.hap.Characteristic;
     HomebridgeAPI = homebridge;
@@ -13,83 +37,170 @@ module.exports = function (homebridge) {
 };
 
 
+function read() {
+	var data = fs.readFileSync(readFile, "utf-8");
+	var lastSync = Date.parse(data.substring(0, 19));
+	temperature = parseFloat(data.substring(20));
+	airPressure = parseFloat(data.substring(26));
+	maxWind = parseFloat(data.substring(34));
+	avgWind = parseFloat(data.substring(40));
+	sunlight = parseInt(data.substring(46), 10);
+	humidity = parseFloat(data.substring(53));
+	rain = parseFloat(data.substring(56)) * 10;
+	battery = parseFloat(data.substring(58));
+	uv = parseFloat(data.substring(63));
+}
+
+
 function WeatherStation2Plugin(log, config) {
     var that = this;
-    this.log = log;
+    this.log = glog = log;
     this.name = config.name;
     this.displayName = this.name;
     this.deviceId = config.deviceId;
-    this.interval = Math.min(Math.max(config.interval, 1), 600);
+    this.interval = Math.min(Math.max(config.interval, 1), 60);
 
     this.config = config;
 
     this.storedData = {};
 
-    if (config.humidityAlertLevel != null) {
-        this.humidityAlert = true;
-        this.humidityAlertLevel = config.humidityAlertLevel;
+	lightAlertLevel = config['lightAlertLevel'];
+	maxWindAlertLevel = config['maxWindAlertLevel'];
+	rainAlertLevel = config['rainAlertLevel'];
+
+    if (lightAlertLevel != null) {
+        this.lightAlert = true;
+        this.lightAlertLevel = lightAlertLevel;
     } else {
-        this.humidityAlert = false;
+        this.lightAlert = false;
     }
 
-    if (config.lowLightAlertLevel != null) {
-        this.lowLightAlert = true;
-        this.lowLightAlertLevel = config.lowLightAlertLevel;
+    if (maxWindAlertLevel != null) {
+        this.maxWindAlert = true;
+        this.maxWindAlertLevel = maxWindAlertLevel;
     } else {
-        this.lowLightAlert = false;
+        this.maxWindAlert = false;
     }
+
+    if (rainAlertLevel != null) {
+        this.rainAlert = true;
+        this.rainAlertLevel = rainAlertLevel;
+    } else {
+        this.rainAlert = false;
+    }
+
 
     // Setup services
     this.setUpServices();
-}
+    
+    read();
+
+	intervalID = setInterval(function() {
+		//glog("checking...");
+		
+		var stats = fs.statSync(readFile);
+		
+		var doit = false;
+		if (ctime) {
+			if (ctime.getTime() != stats.mtime.getTime()) {
+				ctime = stats.mtime;
+				doit = true;
+			}
+		}
+		else {
+			ctime = stats.mtime;
+			doit = true;
+		}
+			
+		if (doit) {
+			read();
+			//glog("read");
+
+			that.fakeGatoHistoryService.addEntry({
+				time: new Date().getTime() / 1000,
+				temp: temperature,
+				pressure: airPressure,
+				humidity: humidity
+				});
+		}
+	}, 2000);
+};
 
 
 WeatherStation2Plugin.prototype.getFirmwareRevision = function (callback) {
-    callback(null, this.storedData.firmware ? this.storedData.firmware.firmwareVersion : '0.0.0');
+    callback(null, '1.0.0');
 };
 
 WeatherStation2Plugin.prototype.getBatteryLevel = function (callback) {
-    callback(null, this.storedData.firmware ? this.storedData.firmware.batteryLevel : 0);
+	var perc = (battery - 0.8) * 100;
+    callback(null,perc);
 };
 
 WeatherStation2Plugin.prototype.getStatusActive = function (callback) {
-    callback(null, this.storedData.data ? true : false);
+    callback(null, true);
 };
 
 WeatherStation2Plugin.prototype.getStatusLowBattery = function (callback) {
-    if (this.storedData.firmware) {
-        callback(null, this.storedData.firmware.batteryLevel <= 20 ? Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW : Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL);
-    } else {
+	if (battery >= 0.8)
         callback(null, Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL);
-    }
+    else
+        callback(null, Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW);
 };
 
-WeatherStation2Plugin.prototype.getStatusLowMoisture = function (callback) {
-    if (this.storedData.data) {
-        callback(null, this.storedData.data.moisture <= this.humidityAlertLevel ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED : Characteristic.ContactSensorState.CONTACT_DETECTED);
+WeatherStation2Plugin.prototype.getStatusLight = function (callback) {	
+    if (true) {
+        callback(null, sunlight > lightAlertLevel ? Characteristic.ContactSensorState.CONTACT_DETECTED : Characteristic.ContactSensorState.CONTACT_NOT_DETECTED);
     } else {
         callback(null, Characteristic.ContactSensorState.CONTACT_DETECTED);
     }
 };
 
-WeatherStation2Plugin.prototype.getStatusLowLight = function (callback) {
-    if (this.storedData.data) {
-        callback(null, this.storedData.data.lux <= this.lowLightAlertLevel ? Characteristic.ContactSensorState.CONTACT_NOT_DETECTED : Characteristic.ContactSensorState.CONTACT_DETECTED);
+WeatherStation2Plugin.prototype.getStatusMaxWind = function (callback) {	
+    if (true) {
+        callback(null, maxWind > maxWindAlertLevel ? Characteristic.ContactSensorState.CONTACT_DETECTED : Characteristic.ContactSensorState.CONTACT_NOT_DETECTED);
+    } else {
+        callback(null, Characteristic.ContactSensorState.CONTACT_DETECTED);
+    }
+};
+
+WeatherStation2Plugin.prototype.getStatusRainAlert = function (callback) {	
+    if (true) {
+        callback(null, rain > rainAlertLevel ? Characteristic.ContactSensorState.CONTACT_DETECTED : Characteristic.ContactSensorState.CONTACT_NOT_DETECTED);
     } else {
         callback(null, Characteristic.ContactSensorState.CONTACT_DETECTED);
     }
 };
 
 WeatherStation2Plugin.prototype.getCurrentAmbientLightLevel = function (callback) {
-    callback(null, this.storedData.data ? this.storedData.data.lux : 0);
+	callback(null, sunlight);
 };
+
+WeatherStation2Plugin.prototype.getCurrentAvgWind = function (callback) {
+	callback(null, avgWind);
+};	
+
+WeatherStation2Plugin.prototype.getCurrentMaxWind = function (callback) {
+	callback(null, maxWind);
+};	
 
 WeatherStation2Plugin.prototype.getCurrentTemperature = function (callback) {
-    callback(null, this.storedData.data ? this.storedData.data.temperature : 0);
+    callback(null, temperature);
 };
 
-WeatherStation2Plugin.prototype.getCurrentMoisture = function (callback) {
-    callback(null, this.storedData.data ? this.storedData.data.moisture : 0);
+WeatherStation2Plugin.prototype.getCurrentAirPressure = function (callback) {
+    callback(null, airPressure);
+};
+
+WeatherStation2Plugin.prototype.getCurrentHumidity = function (callback) {
+    callback (null, humidity);
+};
+
+WeatherStation2Plugin.prototype.getCurrentRain = function (callback) {
+    callback (null, rain);
+};
+
+WeatherStation2Plugin.prototype.getCurrentUV = function (callback) {
+    callback (null, uv);
 };
 
 WeatherStation2Plugin.prototype.getCurrentFertility = function (callback) {
@@ -102,11 +213,12 @@ WeatherStation2Plugin.prototype.setUpServices = function () {
     this.informationService = new Service.AccessoryInformation();
 
     this.informationService
-        .setCharacteristic(Characteristic.Manufacturer, this.config.manufacturer)
-        .setCharacteristic(Characteristic.Model, this.config.model || "WeatherStation2")
-        .setCharacteristic(Characteristic.SerialNumber, this.config.serial || hostname + "-" + this.name);
+        .setCharacteristic(Characteristic.Manufacturer, "THN Systems")
+        .setCharacteristic(Characteristic.Model, "WeatherStation2")
+        .setCharacteristic(Characteristic.SerialNumber, hostname + "-" + this.name)
     this.informationService.getCharacteristic(Characteristic.FirmwareRevision)
         .on('get', this.getFirmwareRevision.bind(this));
+        
     this.batteryService = new Service.BatteryService(this.name);
     this.batteryService.getCharacteristic(Characteristic.BatteryLevel)
         .on('get', this.getBatteryLevel.bind(this));
@@ -114,7 +226,7 @@ WeatherStation2Plugin.prototype.setUpServices = function () {
     this.batteryService.getCharacteristic(Characteristic.StatusLowBattery)
         .on('get', this.getStatusLowBattery.bind(this));
 
-    this.lightService = new Service.LightSensor(this.name);
+    this.lightService = new Service.LightSensor("Helligkeitsstufe");
     this.lightService.getCharacteristic(Characteristic.CurrentAmbientLightLevel)
         .on('get', this.getCurrentAmbientLightLevel.bind(this));
     this.lightService.getCharacteristic(Characteristic.StatusLowBattery)
@@ -122,7 +234,7 @@ WeatherStation2Plugin.prototype.setUpServices = function () {
     this.lightService.getCharacteristic(Characteristic.StatusActive)
         .on('get', this.getStatusActive.bind(this));
 
-    this.tempService = new Service.TemperatureSensor(this.name);
+    this.tempService = new Service.TemperatureSensor("Temperatur");
     this.tempService.getCharacteristic(Characteristic.CurrentTemperature)
         .on('get', this.getCurrentTemperature.bind(this));
     this.tempService.getCharacteristic(Characteristic.StatusLowBattery)
@@ -130,43 +242,109 @@ WeatherStation2Plugin.prototype.setUpServices = function () {
     this.tempService.getCharacteristic(Characteristic.StatusActive)
         .on('get', this.getStatusActive.bind(this));
 
-    this.humidityService = new Service.HumiditySensor(this.name);
+    this.humidityService = new Service.HumiditySensor("Luftfeuchtigkeit");
     this.humidityService.getCharacteristic(Characteristic.CurrentRelativeHumidity)
-        .on('get', this.getCurrentMoisture.bind(this));
+        .on('get', this.getCurrentHumidity.bind(this));
     this.humidityService.getCharacteristic(Characteristic.StatusLowBattery)
         .on('get', this.getStatusLowBattery.bind(this));
     this.humidityService.getCharacteristic(Characteristic.StatusActive)
         .on('get', this.getStatusActive.bind(this));
 
-    if (this.humidityAlert) {
-        this.humidityAlertService = new Service.ContactSensor(this.name + " Low Humidity", "humidity");
-        this.humidityAlertService.getCharacteristic(Characteristic.ContactSensorState)
-            .on('get', this.getStatusLowMoisture.bind(this));
-        this.humidityAlertService.getCharacteristic(Characteristic.StatusLowBattery)
+    if (this.maxWindAlert) {
+        this.maxWindAlertService = new Service.ContactSensor("zu starke Windböen", "maxWind");
+        this.maxWindAlertService.getCharacteristic(Characteristic.ContactSensorState)
+            .on('get', this.getStatusMaxWind.bind(this));
+        this.maxWindAlertService.getCharacteristic(Characteristic.StatusLowBattery)
             .on('get', this.getStatusLowBattery.bind(this));
-        this.humidityAlertService.getCharacteristic(Characteristic.StatusActive)
+        this.maxWindAlertService.getCharacteristic(Characteristic.StatusActive)
             .on('get', this.getStatusActive.bind(this));
     }
 
-    if (this.lowLightAlert) {
-        this.lowLightAlertService = new Service.ContactSensor(this.name + " Low Light", "light");
-        this.lowLightAlertService.getCharacteristic(Characteristic.ContactSensorState)
-            .on('get', this.getStatusLowLight.bind(this));
-        this.lowLightAlertService.getCharacteristic(Characteristic.StatusLowBattery)
+    if (this.lightAlert) {
+        this.lightAlertService = new Service.ContactSensor("zu viel Sonne", "light");
+        this.lightAlertService.getCharacteristic(Characteristic.ContactSensorState)
+            .on('get', this.getStatusLight.bind(this));
+        this.lightAlertService.getCharacteristic(Characteristic.StatusLowBattery)
             .on('get', this.getStatusLowBattery.bind(this));
-        this.lowLightAlertService.getCharacteristic(Characteristic.StatusActive)
-            .on('get', this.getStatusActive.bind(this));
+        this.lightAlertService.getCharacteristic(Characteristic.StatusActive)
+            .on('get', this.getStatusActive.bind(this));            
     }
 
-    this.fakeGatoHistoryService = new FakeGatoHistoryService("room", this, { storage: 'fs' });
+    if (this.rainAlert) {
+        this.rainAlertService = new Service.ContactSensor("Regen", "rain");
+        this.rainAlertService.getCharacteristic(Characteristic.ContactSensorState)
+            .on('get', this.getStatusRainAlert.bind(this));
+        this.rainAlertService.getCharacteristic(Characteristic.StatusLowBattery)
+            .on('get', this.getStatusLowBattery.bind(this));
+        this.rainAlertService.getCharacteristic(Characteristic.StatusActive)
+            .on('get', this.getStatusActive.bind(this));            
+    }
+
+    this.fakeGatoHistoryService = new FakeGatoHistoryService("weather", this, { storage: 'fs' });
 
     /*
         own characteristics and services
     */
+    
+    var CustomCharacteristic = {};
+    
+    //airpressure characteristic
+    CustomCharacteristic.AirPressure = function () {
+		Characteristic.call(this, 'Air Pressure', 'E863F10F-079E-48FF-8F27-9C2605A29F52');
+        this.setProps({
+            format: Characteristic.Formats.UINT16,
+            unit: "hPa",
+            maxValue: 1100,
+            minValue: 700,
+            minStep: 1,
+            perms: [Characteristic.Perms.READ, Characteristic.Perms.NOTIFY]
+        });
+        this.value = this.getDefaultValue();
+    };
+    inherits(CustomCharacteristic.AirPressure, Characteristic);
+    
+    CustomCharacteristic.AirPressure.UUID = 'E863F10F-079E-48FF-8F27-9C2605A29F52';
 
-    // moisture characteristic
-    SoilMoisture = function () {
-        Characteristic.call(this, 'Soil Moisture', 'C160D589-9510-4432-BAA6-5D9D77957138');
+
+	// avg wind characteristic
+	CustomCharacteristic.avgWind = function () {
+		Characteristic.call(this, 'Windgeschwindigkeit', '49C8AE5A-A3A5-41AB-BF1F-12D5654F9F41');
+		this.setProps({
+			format: Characteristic.Formats.FLOAT,
+			unit: "km/h",
+			maxValue: 100,
+			minValue: 0,
+			minStep: 0.1,
+            perms: [Characteristic.Perms.READ, Characteristic.Perms.NOTIFY]
+        });
+        this.value = this.getDefaultValue();
+	};
+    inherits(CustomCharacteristic.avgWind, Characteristic);
+
+    CustomCharacteristic.avgWind.UUID = '49C8AE5A-A3A5-41AB-BF1F-12D5654F9F41';
+
+
+	// max wind characteristic
+	CustomCharacteristic.maxWind = function () {
+		Characteristic.call(this, 'max. Windböen', '1b3d4324-9d68-11e8-9d55-f7a461994af7');
+		this.setProps({
+			format: Characteristic.Formats.FLOAT,
+			unit: "km/h",
+			maxValue: 100,
+			minValue: 0,
+			minStep: 0.1,
+            perms: [Characteristic.Perms.READ, Characteristic.Perms.NOTIFY]
+        });
+        this.value = this.getDefaultValue();
+	};
+    inherits(CustomCharacteristic.maxWind, Characteristic);
+
+    CustomCharacteristic.maxWind.UUID = '1b3d4324-9d68-11e8-9d55-f7a461994af7';
+
+
+    // rain characteristic
+    Rain = function () {
+        Characteristic.call(this, 'Regen', '10c88f40-7ec4-478c-8d5a-bd0c3cce14b7');
         this.setProps({
             format: Characteristic.Formats.UINT8,
             unit: Characteristic.Units.PERCENTAGE,
@@ -178,61 +356,76 @@ WeatherStation2Plugin.prototype.setUpServices = function () {
         this.value = this.getDefaultValue();
     };
 
-    inherits(SoilMoisture, Characteristic);
+    inherits(Rain, Characteristic);
 
-    SoilMoisture.UUID = 'C160D589-9510-4432-BAA6-5D9D77957138';
+    Rain.UUID = '10c88f40-7ec4-478c-8d5a-bd0c3cce14b7';
 
-
-    // fertility characteristic
-    SoilFertility = function () {
-        Characteristic.call(this, 'Soil Fertility', '0029260E-B09C-4FD7-9E60-2C60F1250618');
+    // UV characteristic
+    UVSensor = function () {
+        Characteristic.call(this, 'UV Index', '05ba0fe0-b848-4226-906d-5b64272e05ce');
         this.setProps({
             format: Characteristic.Formats.UINT8,
-            maxValue: 10000,
+            //unit: Characteristic.Units.PERCENTAGE,
+            maxValue: 100,
             minValue: 0,
-            minStep: 1,
+            minStep: 0.1,
             perms: [Characteristic.Perms.READ, Characteristic.Perms.NOTIFY]
         });
         this.value = this.getDefaultValue();
     };
 
-    inherits(SoilFertility, Characteristic);
+    inherits(UVSensor, Characteristic);
 
-    SoilFertility.UUID = '0029260E-B09C-4FD7-9E60-2C60F1250618';
+    UVSensor.UUID = '05ba0fe0-b848-4226-906d-5b64272e05ce';
 
 
-    // moisture sensor
-    PlantSensor = function (displayName, subtype) {
+    // Weather sensor
+    WeatherSensor = function (displayName, subtype) {
         Service.call(this, displayName, '3C233958-B5C4-4218-A0CD-60B8B971AA0A', subtype);
 
         // Required Characteristics
-        this.addCharacteristic(SoilMoisture);
+        this.addCharacteristic(Rain);
 
         // Optional Characteristics
         this.addOptionalCharacteristic(Characteristic.CurrentTemperature);
-        this.addOptionalCharacteristic(SoilFertility);
+        //this.addOptionalCharacteristic(SoilFertility);
     };
 
-    inherits(PlantSensor, Service);
+    inherits(WeatherSensor, Service);
 
-    PlantSensor.UUID = '3C233958-B5C4-4218-A0CD-60B8B971AA0A';
+    WeatherSensor.UUID = '3C233958-B5C4-4218-A0CD-60B8B971AA0A';
 
 
-    this.plantSensorService = new PlantSensor(this.name);
-    this.plantSensorService.getCharacteristic(SoilMoisture)
-        .on('get', this.getCurrentMoisture.bind(this));
-    this.plantSensorService.getCharacteristic(SoilFertility)
-        .on('get', this.getCurrentFertility.bind(this));
+    this.weatherSensorService = new WeatherSensor('Wind'); // this.name);
+
+    this.weatherSensorService.getCharacteristic(CustomCharacteristic.avgWind)
+		.on('get', this.getCurrentAvgWind.bind(this));
+    
+    this.weatherSensorService.getCharacteristic(CustomCharacteristic.maxWind)
+		.on('get', this.getCurrentMaxWind.bind(this));
+    
+    this.weatherSensorService.getCharacteristic(Rain)
+        .on('get', this.getCurrentRain.bind(this));
+       
+    this.weatherSensorService.getCharacteristic(CustomCharacteristic.AirPressure)
+		.on('get', this.getCurrentAirPressure.bind(this));
+		
+    this.weatherSensorService.getCharacteristic(UVSensor)
+        .on('get', this.getCurrentUV.bind(this));
 };
 
 
 WeatherStation2Plugin.prototype.getServices = function () {
-    var services = [this.informationService, this.batteryService, this.lightService, this.tempService, this.humidityService, this.plantSensorService, this.fakeGatoHistoryService];
-    if (this.humidityAlert) {
-        services[services.length] = this.humidityAlertService;
+    var services = [this.informationService, this.batteryService, this.lightService, this.tempService, 
+					this.humidityService, this.weatherSensorService, this.fakeGatoHistoryService];
+    if (this.maxWindAlert) {
+        services[services.length] = this.maxWindAlertService;
     }
-    if (this.lowLightAlert) {
-        services[services.length] = this.lowLightAlertService;
+    if (this.lightAlert) {
+        services[services.length] = this.lightAlertService;
+	}
+    if (this.rainAlert) {
+        services[services.length] = this.rainAlertService;
     }
     return services;
 };
