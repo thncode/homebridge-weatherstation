@@ -1,4 +1,3 @@
-
 //#include <stdlib.h>
 #include <cstdlib>
 #include <iostream>
@@ -20,15 +19,14 @@ unsigned long startTime, stopTime, counter, rxTimer=0;
 FILE *file1;
 const char *filename1 = "/home/pi/WeatherStation/data.txt";
 
-
 int main(int argc, char** argv){
 
-  cout << "Weather Station Receiver V1.0.1\n";
+  cout << "Weather Station Receiver V1.0.3\n";
 
   radio.begin();
-  radio.setChannel(127);
+  radio.setChannel(102);
   radio.setPALevel(RF24_PA_MAX);
-  radio.setDataRate(RF24_2MBPS);
+  radio.setDataRate(RF24_250KBPS);
   radio.setAutoAck(false);                 // Ensure autoACK is enabled
   radio.enableDynamicPayloads();
   radio.setRetries(12,15);                  // Optionally, increase the delay between retries & # of retries
@@ -59,8 +57,10 @@ int main(int argc, char** argv){
 		 gettimeofday(&curTime, NULL);
 		 char TimeString[136];
 		 strftime(TimeString, 80, "%Y-%m-%d %H:%M:%S", localtime(&curTime.tv_sec));
+		 
+		 int32_t data0 = data[0];
 
-		 float temp = float(data[0]) / 100;
+		 float temp = float(data0) / 100;
 		 float pressure = float(data[1]) / 100;
 		 float maxWind =  float(data[2]) / 10;
 		 float avgWind =  float(data[3]) / 10;
