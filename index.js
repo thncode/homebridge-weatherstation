@@ -41,14 +41,14 @@ function read() {
 	var data = fs.readFileSync(readFile, "utf-8");
 	var lastSync = Date.parse(data.substring(0, 19));
 	temperature = parseFloat(data.substring(20));
-	airPressure = parseFloat(data.substring(26));
+	airPressure = parseFloat(data.substring(25));
 	maxWind = parseFloat(data.substring(34));
 	avgWind = parseFloat(data.substring(40));
 	sunlight = parseInt(data.substring(46), 10);
-	humidity = parseFloat(data.substring(53));
-	rain = parseFloat(data.substring(56)) * 10;
-	battery = parseFloat(data.substring(58));
-	uv = parseFloat(data.substring(63));
+	humidity = parseFloat(data.substring(52));
+	rain = parseFloat(data.substring(55)) * 10;
+	battery = parseFloat(data.substring(57));
+	uv = parseFloat(data.substring(62));
 }
 
 
@@ -114,7 +114,7 @@ function WeatherStation2Plugin(log, config) {
 			
 		if (doit) {
 			read();
-			//glog("read");
+			glog("Data: ", temperature, airPressure, maxWind, avgWind, sunlight, humidity, rain, battery);
 
 			that.fakeGatoHistoryService.addEntry({
 				time: new Date().getTime() / 1000,
@@ -212,6 +212,8 @@ WeatherStation2Plugin.prototype.setUpServices = function () {
     // info service
     this.informationService = new Service.AccessoryInformation();
 
+	//this.log("init");
+
     this.informationService
         .setCharacteristic(Characteristic.Manufacturer, "THN Systems")
         .setCharacteristic(Characteristic.Model, "WeatherStation2")
@@ -228,6 +230,7 @@ WeatherStation2Plugin.prototype.setUpServices = function () {
 
     this.lightService = new Service.LightSensor("Helligkeitsstufe");
     this.lightService.getCharacteristic(Characteristic.CurrentAmbientLightLevel)
+		.setProps({minStep: 1})
         .on('get', this.getCurrentAmbientLightLevel.bind(this));
     this.lightService.getCharacteristic(Characteristic.StatusLowBattery)
         .on('get', this.getStatusLowBattery.bind(this));
@@ -236,6 +239,7 @@ WeatherStation2Plugin.prototype.setUpServices = function () {
 
     this.tempService = new Service.TemperatureSensor("Temperatur");
     this.tempService.getCharacteristic(Characteristic.CurrentTemperature)
+		.setProps({minValue: -50})
         .on('get', this.getCurrentTemperature.bind(this));
     this.tempService.getCharacteristic(Characteristic.StatusLowBattery)
         .on('get', this.getStatusLowBattery.bind(this));
