@@ -1,9 +1,9 @@
-# homebridge-weatherstation2
+# homebridge-weatherstation
 
 this code is part of an Arduino personal weather station project
 
     {
-      "accessory" : "WeatherStation2",
+      "accessory" : "WeatherStation",
       "interval" : 300,
       "lightAlertLevel" : 50000,
       "maxWindAlertLevel" : 20,
