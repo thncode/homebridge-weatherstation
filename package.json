@@ -1,31 +1,58 @@
 {
+  "_from": "homebridge-weatherstation2",
+  "_id": "homebridge-weatherstation2@1.0.0",
+  "_inBundle": false,
+  "_integrity": "sha512-kVImaHnx19yBoogLqM3YBtNFFP9omv5or95F6rTOVj/PIOyL4wCma2NcDf7sWehBt7rgFmEkTTF7KKedcDxtbQ==",
+  "_location": "/homebridge-weatherstation2",
+  "_phantomChildren": {},
+  "_requested": {
+    "type": "tag",
+    "registry": true,
+    "raw": "homebridge-weatherstation2",
     "name": "homebridge-weatherstation2",
-    "version": "0.0.1",
-    "description": "This is a homebridge plugin for local weather stations",
-    "main": "index.js",
-    "scripts": {
-        "test": "echo \"Error: no test specified\" && exit 1"
-    },
-    "repository": {
-        "type": "git",
-        "url": "git+https://github.com/thncode/homebridge-weatherstation2.git"
-    },
-    "keywords": [
-        "homebridge",
-        "homebridge-plugin",
-        "HomeKit"
-    ],
-    "author": "Thomas Nemec",
-    "license": "ISC",
-    "bugs": {
-        "url": "https://github.com/thncode/homebridge-weatherstation2/issues"
-    },
-    "homepage": "https://github.com/thncode/homebridge-weatherstation2#readme",
-    "engines" : {
-        "node": ">=0.12.0",
-        "homebridge": ">=0.2.0"
-    },
-    "dependencies" :{
-        "fakegato-history": "^0.4.0"
-    }
+    "escapedName": "homebridge-weatherstation2",
+    "rawSpec": "",
+    "saveSpec": null,
+    "fetchSpec": "latest"
+  },
+  "_requiredBy": [
+    "#USER"
+  ],
+  "_resolved": "https://registry.npmjs.org/homebridge-weatherstation2/-/homebridge-weatherstation2-1.0.0.tgz",
+  "_shasum": "be4debda6bb77d3bee21052a35a4065e8fa2f50b",
+  "_spec": "homebridge-weatherstation2",
+  "_where": "/home/pi",
+  "author": {
+    "name": "Thomas Nemec"
+  },
+  "bugs": {
+    "url": "https://github.com/thncode/homebridge-weatherstation2/issues"
+  },
+  "bundleDependencies": false,
+  "dependencies": {
+    "fakegato-history": "^0.5.3"
+  },
+  "deprecated": false,
+  "description": "This is a homebridge plugin for local weather stations",
+  "engines": {
+    "homebridge": ">=0.2.0",
+    "node": ">=0.12.0"
+  },
+  "homepage": "https://github.com/thncode/homebridge-weatherstation2#readme",
+  "keywords": [
+    "homebridge",
+    "homebridge-plugin",
+    "HomeKit"
+  ],
+  "license": "ISC",
+  "main": "index.js",
+  "name": "homebridge-weatherstation2",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/thncode/homebridge-weatherstation2.git"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "version": "1.0.0"
 }
