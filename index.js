@@ -1,3 +1,5 @@
+// WeatherStation
+
 var Service, Characteristic, HomebridgeAPI, FakeGatoHistoryService;
 var inherits = require('util').inherits;
 var os = require("os");
@@ -5,7 +7,6 @@ var hostname = os.hostname();
 const fs = require('fs');
 
 var intervalID;
-var f_intervalID;
 
 const readFile = "/home/pi/WeatherStation/data.txt";
 
@@ -19,10 +20,6 @@ var rain;
 var battery;
 var uv;
 
-var lightAlertLevel;
-var maxWindAlertLevel;
-var rainAlertLevel;
-
 var glog;
 var ctime;
 
@@ -33,7 +30,7 @@ module.exports = function (homebridge) {
     HomebridgeAPI = homebridge;
     FakeGatoHistoryService = require("fakegato-history")(homebridge);
 
-    homebridge.registerAccessory("homebridge-weatherstation2", "WeatherStation2", WeatherStation2Plugin);
+    homebridge.registerAccessory("homebridge-weatherstation", "WeatherStation", WeatherStation);
 };
 
 
@@ -52,7 +49,7 @@ function read() {
 }
 
 
-function WeatherStation2Plugin(log, config) {
+function WeatherStation(log, config) {
     var that = this;
     this.log = glog = log;
     this.name = config.name;
@@ -64,39 +61,11 @@ function WeatherStation2Plugin(log, config) {
 
     this.storedData = {};
 
-	lightAlertLevel = config['lightAlertLevel'];
-	maxWindAlertLevel = config['maxWindAlertLevel'];
-	rainAlertLevel = config['rainAlertLevel'];
-
-    if (lightAlertLevel != null) {
-        this.lightAlert = true;
-        this.lightAlertLevel = lightAlertLevel;
-    } else {
-        this.lightAlert = false;
-    }
-
-    if (maxWindAlertLevel != null) {
-        this.maxWindAlert = true;
-        this.maxWindAlertLevel = maxWindAlertLevel;
-    } else {
-        this.maxWindAlert = false;
-    }
-
-    if (rainAlertLevel != null) {
-        this.rainAlert = true;
-        this.rainAlertLevel = rainAlertLevel;
-    } else {
-        this.rainAlert = false;
-    }
-
-
-    // Setup services
     this.setUpServices();
     
     read();
 
 	intervalID = setInterval(function() {
-		//glog("checking...");
 		
 		var stats = fs.statSync(readFile);
 		
@@ -127,96 +96,65 @@ function WeatherStation2Plugin(log, config) {
 };
 
 
-WeatherStation2Plugin.prototype.getFirmwareRevision = function (callback) {
+WeatherStation.prototype.getFirmwareRevision = function (callback) {
     callback(null, '1.0.0');
 };
 
-WeatherStation2Plugin.prototype.getBatteryLevel = function (callback) {
+WeatherStation.prototype.getBatteryLevel = function (callback) {
 	var perc = (battery - 0.8) * 100;
     callback(null,perc);
 };
 
-WeatherStation2Plugin.prototype.getStatusActive = function (callback) {
+WeatherStation.prototype.getStatusActive = function (callback) {
     callback(null, true);
 };
 
-WeatherStation2Plugin.prototype.getStatusLowBattery = function (callback) {
+WeatherStation.prototype.getStatusLowBattery = function (callback) {
 	if (battery >= 0.8)
         callback(null, Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL);
     else
         callback(null, Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW);
 };
 
-WeatherStation2Plugin.prototype.getStatusLight = function (callback) {	
-    if (true) {
-        callback(null, sunlight > lightAlertLevel ? Characteristic.ContactSensorState.CONTACT_DETECTED : Characteristic.ContactSensorState.CONTACT_NOT_DETECTED);
-    } else {
-        callback(null, Characteristic.ContactSensorState.CONTACT_DETECTED);
-    }
-};
-
-WeatherStation2Plugin.prototype.getStatusMaxWind = function (callback) {	
-    if (true) {
-        callback(null, maxWind > maxWindAlertLevel ? Characteristic.ContactSensorState.CONTACT_DETECTED : Characteristic.ContactSensorState.CONTACT_NOT_DETECTED);
-    } else {
-        callback(null, Characteristic.ContactSensorState.CONTACT_DETECTED);
-    }
-};
-
-WeatherStation2Plugin.prototype.getStatusRainAlert = function (callback) {	
-    if (true) {
-        callback(null, rain > rainAlertLevel ? Characteristic.ContactSensorState.CONTACT_DETECTED : Characteristic.ContactSensorState.CONTACT_NOT_DETECTED);
-    } else {
-        callback(null, Characteristic.ContactSensorState.CONTACT_DETECTED);
-    }
-};
-
-WeatherStation2Plugin.prototype.getCurrentAmbientLightLevel = function (callback) {
+WeatherStation.prototype.getCurrentAmbientLightLevel = function (callback) {
 	callback(null, sunlight);
 };
 
-WeatherStation2Plugin.prototype.getCurrentAvgWind = function (callback) {
+WeatherStation.prototype.getCurrentAvgWind = function (callback) {
 	callback(null, avgWind);
 };	
 
-WeatherStation2Plugin.prototype.getCurrentMaxWind = function (callback) {
+WeatherStation.prototype.getCurrentMaxWind = function (callback) {
 	callback(null, maxWind);
 };	
 
-WeatherStation2Plugin.prototype.getCurrentTemperature = function (callback) {
+WeatherStation.prototype.getCurrentTemperature = function (callback) {
     callback(null, temperature);
 };
 
-WeatherStation2Plugin.prototype.getCurrentAirPressure = function (callback) {
+WeatherStation.prototype.getCurrentAirPressure = function (callback) {
     callback(null, airPressure);
 };
 
-WeatherStation2Plugin.prototype.getCurrentHumidity = function (callback) {
+WeatherStation.prototype.getCurrentHumidity = function (callback) {
     callback (null, humidity);
 };
 
-WeatherStation2Plugin.prototype.getCurrentRain = function (callback) {
+WeatherStation.prototype.getCurrentRain = function (callback) {
     callback (null, rain);
 };
 
-WeatherStation2Plugin.prototype.getCurrentUV = function (callback) {
+WeatherStation.prototype.getCurrentUV = function (callback) {
     callback (null, uv);
 };
 
-WeatherStation2Plugin.prototype.getCurrentFertility = function (callback) {
-    callback(null, this.storedData.data ? this.storedData.data.fertility : 0);
-};
-
-
-WeatherStation2Plugin.prototype.setUpServices = function () {
+WeatherStation.prototype.setUpServices = function () {
     // info service
     this.informationService = new Service.AccessoryInformation();
 
-	//this.log("init");
-
     this.informationService
         .setCharacteristic(Characteristic.Manufacturer, "THN Systems")
-        .setCharacteristic(Characteristic.Model, "WeatherStation2")
+        .setCharacteristic(Characteristic.Model, "WeatherStation")
         .setCharacteristic(Characteristic.SerialNumber, hostname + "-" + this.name)
     this.informationService.getCharacteristic(Characteristic.FirmwareRevision)
         .on('get', this.getFirmwareRevision.bind(this));
@@ -230,7 +168,6 @@ WeatherStation2Plugin.prototype.setUpServices = function () {
 
     this.lightService = new Service.LightSensor("Helligkeitsstufe");
     this.lightService.getCharacteristic(Characteristic.CurrentAmbientLightLevel)
-		.setProps({minStep: 1})
         .on('get', this.getCurrentAmbientLightLevel.bind(this));
     this.lightService.getCharacteristic(Characteristic.StatusLowBattery)
         .on('get', this.getStatusLowBattery.bind(this));
@@ -254,42 +191,8 @@ WeatherStation2Plugin.prototype.setUpServices = function () {
     this.humidityService.getCharacteristic(Characteristic.StatusActive)
         .on('get', this.getStatusActive.bind(this));
 
-    if (this.maxWindAlert) {
-        this.maxWindAlertService = new Service.ContactSensor("zu starke Windböen", "maxWind");
-        this.maxWindAlertService.getCharacteristic(Characteristic.ContactSensorState)
-            .on('get', this.getStatusMaxWind.bind(this));
-        this.maxWindAlertService.getCharacteristic(Characteristic.StatusLowBattery)
-            .on('get', this.getStatusLowBattery.bind(this));
-        this.maxWindAlertService.getCharacteristic(Characteristic.StatusActive)
-            .on('get', this.getStatusActive.bind(this));
-    }
-
-    if (this.lightAlert) {
-        this.lightAlertService = new Service.ContactSensor("zu viel Sonne", "light");
-        this.lightAlertService.getCharacteristic(Characteristic.ContactSensorState)
-            .on('get', this.getStatusLight.bind(this));
-        this.lightAlertService.getCharacteristic(Characteristic.StatusLowBattery)
-            .on('get', this.getStatusLowBattery.bind(this));
-        this.lightAlertService.getCharacteristic(Characteristic.StatusActive)
-            .on('get', this.getStatusActive.bind(this));            
-    }
-
-    if (this.rainAlert) {
-        this.rainAlertService = new Service.ContactSensor("Regen", "rain");
-        this.rainAlertService.getCharacteristic(Characteristic.ContactSensorState)
-            .on('get', this.getStatusRainAlert.bind(this));
-        this.rainAlertService.getCharacteristic(Characteristic.StatusLowBattery)
-            .on('get', this.getStatusLowBattery.bind(this));
-        this.rainAlertService.getCharacteristic(Characteristic.StatusActive)
-            .on('get', this.getStatusActive.bind(this));            
-    }
-
     this.fakeGatoHistoryService = new FakeGatoHistoryService("weather", this, { storage: 'fs' });
 
-    /*
-        own characteristics and services
-    */
-    
     var CustomCharacteristic = {};
     
     //airpressure characteristic
@@ -382,17 +285,12 @@ WeatherStation2Plugin.prototype.setUpServices = function () {
 
     UVSensor.UUID = '05ba0fe0-b848-4226-906d-5b64272e05ce';
 
-
     // Weather sensor
     WeatherSensor = function (displayName, subtype) {
         Service.call(this, displayName, '3C233958-B5C4-4218-A0CD-60B8B971AA0A', subtype);
 
-        // Required Characteristics
         this.addCharacteristic(Rain);
-
-        // Optional Characteristics
         this.addOptionalCharacteristic(Characteristic.CurrentTemperature);
-        //this.addOptionalCharacteristic(SoilFertility);
     };
 
     inherits(WeatherSensor, Service);
@@ -400,14 +298,14 @@ WeatherStation2Plugin.prototype.setUpServices = function () {
     WeatherSensor.UUID = '3C233958-B5C4-4218-A0CD-60B8B971AA0A';
 
 
-    this.weatherSensorService = new WeatherSensor('Wind'); // this.name);
+    this.weatherSensorService = new WeatherSensor('Wind');
 
     this.weatherSensorService.getCharacteristic(CustomCharacteristic.avgWind)
 		.on('get', this.getCurrentAvgWind.bind(this));
     
     this.weatherSensorService.getCharacteristic(CustomCharacteristic.maxWind)
 		.on('get', this.getCurrentMaxWind.bind(this));
-    
+     
     this.weatherSensorService.getCharacteristic(Rain)
         .on('get', this.getCurrentRain.bind(this));
        
@@ -419,17 +317,8 @@ WeatherStation2Plugin.prototype.setUpServices = function () {
 };
 
 
-WeatherStation2Plugin.prototype.getServices = function () {
+WeatherStation.prototype.getServices = function () {
     var services = [this.informationService, this.batteryService, this.lightService, this.tempService, 
 					this.humidityService, this.weatherSensorService, this.fakeGatoHistoryService];
-    if (this.maxWindAlert) {
-        services[services.length] = this.maxWindAlertService;
-    }
-    if (this.lightAlert) {
-        services[services.length] = this.lightAlertService;
-	}
-    if (this.rainAlert) {
-        services[services.length] = this.rainAlertService;
-    }
     return services;
 };
