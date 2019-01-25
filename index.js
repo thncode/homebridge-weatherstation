@@ -1,155 +1,127 @@
 // WeatherStation
 
-var Service, Characteristic, HomebridgeAPI, FakeGatoHistoryService;
+var Service, Characteristic, HomebridgeAPI, UUIDGen, FakeGatoHistoryService;
 var inherits = require('util').inherits;
 var os = require("os");
 var hostname = os.hostname();
 const fs = require('fs');
-
-var intervalID;
+const moment = require('moment');
 
 const readFile = "/home/pi/WeatherStation/data.txt";
 
-var temperature;
-var airPressure;
-var maxWind;
-var avgWind;
-var sunlight;
-var humidity;
-var rain;
-var battery;
-var uv;
-
-var glog;
-var ctime;
+var temperature, airPressure, maxWind, avgWind, sunlight, humidity, rain, battery, uv;
+var readtime;
 
 module.exports = function (homebridge) {
 	
     Service = homebridge.hap.Service;
     Characteristic = homebridge.hap.Characteristic;
     HomebridgeAPI = homebridge;
+    UUIDGen = homebridge.hap.uuid;
     FakeGatoHistoryService = require("fakegato-history")(homebridge);
 
     homebridge.registerAccessory("homebridge-weatherstation", "WeatherStation", WeatherStation);
 };
 
 
-function read() {
+function WeatherStation(log, config) {
+
+    var that = this;
+    this.log = log;
+    this.name = config.name;
+    this.displayName = this.name;
+    this.deviceId = config.deviceId;
+
+    this.config = config;
+
+    this.setUpServices();
+    
+    this.readData();
+
+   	fs.watch(readFile, (event, filename) => {
+   		if (event === 'change') this.readData();
+   	});
+};
+    
+
+WeatherStation.prototype.readData = function () {
+
 	var data = fs.readFileSync(readFile, "utf-8");
 	var lastSync = Date.parse(data.substring(0, 19));
+	if (readtime == lastSync) return;
+	readtime = lastSync;
+
 	temperature = parseFloat(data.substring(20));
 	airPressure = parseFloat(data.substring(25));
 	maxWind = parseFloat(data.substring(34));
 	avgWind = parseFloat(data.substring(40));
 	sunlight = parseInt(data.substring(46), 10);
 	humidity = parseFloat(data.substring(52));
-	rain = parseFloat(data.substring(55)) * 10;
+	rain = parseFloat(data.substring(55));
 	battery = parseFloat(data.substring(57));
-	uv = parseFloat(data.substring(62));
-}
+	uv = parseFloat(data.substring(62));	
 
+	this.log("Weather data: ", temperature, airPressure, maxWind, avgWind, sunlight, humidity, rain, battery);
 
-function WeatherStation(log, config) {
-    var that = this;
-    this.log = glog = log;
-    this.name = config.name;
-    this.displayName = this.name;
-    this.deviceId = config.deviceId;
-    this.interval = Math.min(Math.max(config.interval, 1), 60);
+	this.fakeGatoHistoryService.addEntry({ time: moment().unix(), temp: temperature, pressure: airPressure, humidity: humidity });
 
-    this.config = config;
-
-    this.storedData = {};
-
-    this.setUpServices();
-    
-    read();
-
-	intervalID = setInterval(function() {
-		
-		var stats = fs.statSync(readFile);
-		
-		var doit = false;
-		if (ctime) {
-			if (ctime.getTime() != stats.mtime.getTime()) {
-				ctime = stats.mtime;
-				doit = true;
-			}
-		}
-		else {
-			ctime = stats.mtime;
-			doit = true;
-		}
-			
-		if (doit) {
-			read();
-			glog("Data: ", temperature, airPressure, maxWind, avgWind, sunlight, humidity, rain, battery);
-
-			that.fakeGatoHistoryService.addEntry({
-				time: new Date().getTime() / 1000,
-				temp: temperature,
-				pressure: airPressure,
-				humidity: humidity
-				});
-		}
-	}, 2000);
+    this.tempService.getCharacteristic(Characteristic.CurrentTemperature).updateValue(temperature, null);
+    this.lightService.getCharacteristic(Characteristic.CurrentAmbientLightLevel).updateValue(sunlight, null);
+    this.humidityService.getCharacteristic(Characteristic.CurrentRelativeHumidity).updateValue(humidity, null);
+    //this.batteryService.getCharacteristic(Characteristic.BatteryLevel).updateValue(null);
 };
 
 
 WeatherStation.prototype.getFirmwareRevision = function (callback) {
-    callback(null, '1.0.0');
+    return callback(null, '1.0');
 };
 
 WeatherStation.prototype.getBatteryLevel = function (callback) {
-	var perc = (battery - 0.8) * 100;
-    callback(null,perc);
+    return callback(null, (battery - 0.8) * 100);
 };
 
 WeatherStation.prototype.getStatusActive = function (callback) {
-    callback(null, true);
+    return callback(null, true);
 };
 
 WeatherStation.prototype.getStatusLowBattery = function (callback) {
-	if (battery >= 0.8)
-        callback(null, Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL);
-    else
-        callback(null, Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW);
+    return callback(null, battery >= 0.8 ? Characteristic.StatusLowBattery.BATTERY_LEVEL_NORMAL : Characteristic.StatusLowBattery.BATTERY_LEVEL_LOW);
 };
 
 WeatherStation.prototype.getCurrentAmbientLightLevel = function (callback) {
-	callback(null, sunlight);
+	return callback(null, sunlight);
 };
 
 WeatherStation.prototype.getCurrentAvgWind = function (callback) {
-	callback(null, avgWind);
+	return callback(null, avgWind);
 };	
 
 WeatherStation.prototype.getCurrentMaxWind = function (callback) {
-	callback(null, maxWind);
+	return callback(null, maxWind);
 };	
 
 WeatherStation.prototype.getCurrentTemperature = function (callback) {
-    callback(null, temperature);
+    return callback(null, temperature);
 };
 
 WeatherStation.prototype.getCurrentAirPressure = function (callback) {
-    callback(null, airPressure);
+    return callback(null, airPressure);
 };
 
 WeatherStation.prototype.getCurrentHumidity = function (callback) {
-    callback (null, humidity);
+    return callback (null, humidity);
 };
 
 WeatherStation.prototype.getCurrentRain = function (callback) {
-    callback (null, rain);
+    return callback (null, rain * 10);
 };
 
 WeatherStation.prototype.getCurrentUV = function (callback) {
-    callback (null, uv);
+    return callback (null, uv);
 };
 
 WeatherStation.prototype.setUpServices = function () {
-    // info service
+
     this.informationService = new Service.AccessoryInformation();
 
     this.informationService
@@ -209,7 +181,6 @@ WeatherStation.prototype.setUpServices = function () {
         this.value = this.getDefaultValue();
     };
     inherits(CustomCharacteristic.AirPressure, Characteristic);
-    
     CustomCharacteristic.AirPressure.UUID = 'E863F10F-079E-48FF-8F27-9C2605A29F52';
 
 
@@ -227,7 +198,6 @@ WeatherStation.prototype.setUpServices = function () {
         this.value = this.getDefaultValue();
 	};
     inherits(CustomCharacteristic.avgWind, Characteristic);
-
     CustomCharacteristic.avgWind.UUID = '49C8AE5A-A3A5-41AB-BF1F-12D5654F9F41';
 
 
@@ -245,7 +215,6 @@ WeatherStation.prototype.setUpServices = function () {
         this.value = this.getDefaultValue();
 	};
     inherits(CustomCharacteristic.maxWind, Characteristic);
-
     CustomCharacteristic.maxWind.UUID = '1b3d4324-9d68-11e8-9d55-f7a461994af7';
 
 
@@ -264,7 +233,6 @@ WeatherStation.prototype.setUpServices = function () {
     };
 
     inherits(Rain, Characteristic);
-
     Rain.UUID = '10c88f40-7ec4-478c-8d5a-bd0c3cce14b7';
 
     // UV characteristic
@@ -282,7 +250,6 @@ WeatherStation.prototype.setUpServices = function () {
     };
 
     inherits(UVSensor, Characteristic);
-
     UVSensor.UUID = '05ba0fe0-b848-4226-906d-5b64272e05ce';
 
     // Weather sensor
@@ -294,11 +261,10 @@ WeatherStation.prototype.setUpServices = function () {
     };
 
     inherits(WeatherSensor, Service);
-
     WeatherSensor.UUID = '3C233958-B5C4-4218-A0CD-60B8B971AA0A';
 
 
-    this.weatherSensorService = new WeatherSensor('Wind');
+    this.weatherSensorService = new WeatherSensor('Wind & Regen');
 
     this.weatherSensorService.getCharacteristic(CustomCharacteristic.avgWind)
 		.on('get', this.getCurrentAvgWind.bind(this));
