@@ -1,4 +1,4 @@
-// WeatherStation
+// WeatherStation Core (mrv)
 
 var Service, Characteristic, HomebridgeAPI, UUIDGen, FakeGatoHistoryService;
 var inherits = require('util').inherits;
@@ -7,10 +7,9 @@ var hostname = os.hostname();
 const fs = require('fs');
 const moment = require('moment');
 
-const readFile = "/home/pi/WeatherStation/data.txt";
+const readFile = "/root/.homebridge/weatherstation.txt";
 
-var temperature, airPressure, maxWind, avgWind, sunlight, humidity, rain, battery, uv;
-var readtime;
+var temperature, airPressure, maxWind, avgWind, sunlight, humidity, rain, battery, uv, charging, readtime;
 
 module.exports = function (homebridge) {
 	
@@ -44,43 +43,69 @@ function WeatherStation(log, config) {
 };
     
 
+function batteryLevel() {
+	return battery * 100 / 3.7;
+}
+
+
+function chargingState() {
+	return charging != 0.0;
+}
+
+
 WeatherStation.prototype.readData = function () {
 
 	var data = fs.readFileSync(readFile, "utf-8");
 	var lastSync = Date.parse(data.substring(0, 19));
+	if (lastSync == undefined) return;
+	if (isNaN(lastSync)) return;
 	if (readtime == lastSync) return;
 	readtime = lastSync;
 
 	temperature = parseFloat(data.substring(20));
 	airPressure = parseFloat(data.substring(25));
-	maxWind = parseFloat(data.substring(34));
-	avgWind = parseFloat(data.substring(40));
-	sunlight = parseInt(data.substring(46), 10);
+	maxWind = parseFloat(data.substring(33));
+	avgWind = parseFloat(data.substring(39));
+	sunlight = parseInt(data.substring(45));
 	humidity = parseFloat(data.substring(52));
 	rain = parseFloat(data.substring(55));
-	battery = parseFloat(data.substring(57));
-	uv = parseFloat(data.substring(62));	
+	battery = parseFloat(data.substring(58));
+	uv = parseFloat(data.substring(63));
+	charging = parseFloat(data.substring(66));
 
-	this.log("Weather data: ", temperature, airPressure, maxWind, avgWind, sunlight, humidity, rain, battery);
+	this.log("Data: ", temperature, airPressure, maxWind, avgWind, sunlight, humidity, rain, battery, charging);
 
 	this.fakeGatoHistoryService.addEntry({ time: moment().unix(), temp: temperature, pressure: airPressure, humidity: humidity });
 
     this.tempService.getCharacteristic(Characteristic.CurrentTemperature).updateValue(temperature, null);
     this.lightService.getCharacteristic(Characteristic.CurrentAmbientLightLevel).updateValue(sunlight, null);
     this.humidityService.getCharacteristic(Characteristic.CurrentRelativeHumidity).updateValue(humidity, null);
-    //this.batteryService.getCharacteristic(Characteristic.BatteryLevel).updateValue(null);
+    this.batteryService.getCharacteristic(Characteristic.BatteryLevel).updateValue(batteryLevel(), null);
+    this.batteryService.getCharacteristic(Characteristic.BatteryLevel).updateValue(charging, null);
 };
 
+WeatherStation.prototype.getChargingState = function (callback) {
+	var charged = chargingState();
+//	this.log("Charging: ", charged);
+    return callback(null, charged);
+};
 
 WeatherStation.prototype.getFirmwareRevision = function (callback) {
     return callback(null, '1.0');
 };
 
 WeatherStation.prototype.getBatteryLevel = function (callback) {
-    return callback(null, (battery - 0.8) * 100);
+	var battery = batteryLevel();
+    return callback(null, battery);
 };
 
 WeatherStation.prototype.getStatusActive = function (callback) {
+	if (readtime == undefined) return callback(null, false);
+	if (isNaN(readtime)) return callback(null, false);
+	
+	var now = new Date();
+	if ((now - readtime) / (1000 * 60) > 60) return callback(null, false);
+	
     return callback(null, true);
 };
 
@@ -134,7 +159,8 @@ WeatherStation.prototype.setUpServices = function () {
     this.batteryService = new Service.BatteryService(this.name);
     this.batteryService.getCharacteristic(Characteristic.BatteryLevel)
         .on('get', this.getBatteryLevel.bind(this));
-    this.batteryService.setCharacteristic(Characteristic.ChargingState, Characteristic.ChargingState.NOT_CHARGEABLE);
+    this.batteryService.getCharacteristic(Characteristic.ChargingState)
+    	.on('get', this.getChargingState.bind(this));
     this.batteryService.getCharacteristic(Characteristic.StatusLowBattery)
         .on('get', this.getStatusLowBattery.bind(this));
 
@@ -167,7 +193,6 @@ WeatherStation.prototype.setUpServices = function () {
 
     var CustomCharacteristic = {};
     
-    //airpressure characteristic
     CustomCharacteristic.AirPressure = function () {
 		Characteristic.call(this, 'Air Pressure', 'E863F10F-079E-48FF-8F27-9C2605A29F52');
         this.setProps({
@@ -183,8 +208,6 @@ WeatherStation.prototype.setUpServices = function () {
     inherits(CustomCharacteristic.AirPressure, Characteristic);
     CustomCharacteristic.AirPressure.UUID = 'E863F10F-079E-48FF-8F27-9C2605A29F52';
 
-
-	// avg wind characteristic
 	CustomCharacteristic.avgWind = function () {
 		Characteristic.call(this, 'Windgeschwindigkeit', '49C8AE5A-A3A5-41AB-BF1F-12D5654F9F41');
 		this.setProps({
@@ -200,8 +223,6 @@ WeatherStation.prototype.setUpServices = function () {
     inherits(CustomCharacteristic.avgWind, Characteristic);
     CustomCharacteristic.avgWind.UUID = '49C8AE5A-A3A5-41AB-BF1F-12D5654F9F41';
 
-
-	// max wind characteristic
 	CustomCharacteristic.maxWind = function () {
 		Characteristic.call(this, 'max. Windböen', '1b3d4324-9d68-11e8-9d55-f7a461994af7');
 		this.setProps({
@@ -217,8 +238,6 @@ WeatherStation.prototype.setUpServices = function () {
     inherits(CustomCharacteristic.maxWind, Characteristic);
     CustomCharacteristic.maxWind.UUID = '1b3d4324-9d68-11e8-9d55-f7a461994af7';
 
-
-    // rain characteristic
     Rain = function () {
         Characteristic.call(this, 'Regen', '10c88f40-7ec4-478c-8d5a-bd0c3cce14b7');
         this.setProps({
@@ -235,12 +254,10 @@ WeatherStation.prototype.setUpServices = function () {
     inherits(Rain, Characteristic);
     Rain.UUID = '10c88f40-7ec4-478c-8d5a-bd0c3cce14b7';
 
-    // UV characteristic
     UVSensor = function () {
         Characteristic.call(this, 'UV Index', '05ba0fe0-b848-4226-906d-5b64272e05ce');
         this.setProps({
             format: Characteristic.Formats.UINT8,
-            //unit: Characteristic.Units.PERCENTAGE,
             maxValue: 100,
             minValue: 0,
             minStep: 0.1,
